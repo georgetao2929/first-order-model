@@ -67,8 +67,6 @@ def make_animation(source_image, driving_video, generator, kp_detector, relative
         kp_source = kp_detector(source)
         kp_driving_initial = kp_detector(driving[:, :, 0])
 
-        i = 0
-
         for frame_idx in tqdm(range(driving.shape[2])):
             driving_frame = driving[:, :, frame_idx]
             if not cpu:
@@ -83,11 +81,9 @@ def make_animation(source_image, driving_video, generator, kp_detector, relative
 
             matplotlib.image.imsave("frameimage/out" + str(i) + ".jpeg", predictions[-1])
 
-            # img = cv2.imread("frameimage/out" + str(i) + ".jpeg")
+            img = cv2.imread("frameimage/out" + str(i) + ".jpeg")
             # cv2.imshow('1', img)
             # cv2.destroyWindow('1')
-
-            i = i + 1
 
             # print(predictions[-1])
     return predictions
@@ -147,62 +143,58 @@ if __name__ == "__main__":
     opt = parser.parse_args()
 
     source_image = imageio.imread(opt.source_image)
-
     reader = imageio.get_reader(opt.driving_video)
     fps = reader.get_meta_data()['fps']
-    driving_video = []
-
-    camera_number = 0
-    vid = cv2.VideoCapture(camera_number + cv2.CAP_DSHOW)
-    #vid = cv2.VideoCapture(0)
-    vid.set(cv2.CAP_PROP_FRAME_WIDTH, 256)
-    vid.set(cv2.CAP_PROP_FRAME_HEIGHT, 256)
+    vid = cv2.VideoCapture(0)  # 用于获取摄像头画面
 
     while (True):
+        driving_video = []
+        i=0
 
         # Capture the video frame
         # by frame
         ret, frame = vid.read()
 
         # Display the resulting frame
-        cv2.imshow('frame', frame)
+        #cv2.imshow('frame', frame)
         driving_video.append(frame)
+        source_image = resize(source_image, (256, 256))[..., :3]
+        driving_video = [resize(frame, (256, 256))[..., :3] for frame in driving_video]
+        generator, kp_detector = load_checkpoints(config_path=opt.config, checkpoint_path=opt.checkpoint, cpu=opt.cpu)
+        predictions = make_animation(source_image, driving_video, generator, kp_detector, relative=opt.relative,
+                                     adapt_movement_scale="adapt_scale", cpu="")
 
+        i=i+1
         # the 'q' button is set as the
         # quitting button you may use any
         # desired button of your choice
-        if cv2.waitKey(1) & 0xFF == ord('q'):
+        # if cv2.waitKey(1) & 0xFF == ord('q'):
+        #     break
+        if i==10:
             break
 
-    # After the loop release the cap object
-    vid.release()
-    # Destroy all the windows
-    cv2.destroyAllWindows()
-
-
-    # temp = 1
+    # temp=1
     # try:
     #     for im in reader:
-    #         driving_video.append(im)
+    #         if(temp<50):
+    #             driving_video.append(im)
+    #             temp=temp+1
     # except RuntimeError:
     #     pass
-    reader.close()
+    # reader.close()
 
-    source_image = resize(source_image, (256, 256))[..., :3]
-    driving_video = [resize(frame, (256, 256))[..., :3] for frame in driving_video]
-    generator, kp_detector = load_checkpoints(config_path=opt.config, checkpoint_path=opt.checkpoint, cpu=opt.cpu)
+    # if opt.find_best_frame or opt.best_frame is not None:
+    #     i = opt.best_frame if opt.best_frame is not None else find_best_frame(source_image, driving_video, cpu=opt.cpu)
+    #     print ("Best frame: " + str(i))
+    #     driving_forward = driving_video[i:]
+    #     driving_backward = driving_video[:(i+1)][::-1]
+    #     predictions_forward = make_animation(source_image, driving_forward, generator, kp_detector, relative=opt.relative, adapt_movement_scale=opt.adapt_scale, cpu=opt.cpu)
+    #     predictions_backward = make_animation(source_image, driving_backward, generator, kp_detector, relative=opt.relative, adapt_movement_scale=opt.adapt_scale, cpu=opt.cpu)
+    #     predictions = predictions_backward[::-1] + predictions_forward[1:]
+    #     print("1\n")
+    # else:
+# print("2\n")
 
-    if opt.find_best_frame or opt.best_frame is not None:
-        i = opt.best_frame if opt.best_frame is not None else find_best_frame(source_image, driving_video, cpu=opt.cpu)
-        print ("Best frame: " + str(i))
-        driving_forward = driving_video[i:]
-        driving_backward = driving_video[:(i+1)][::-1]
-        predictions_forward = make_animation(source_image, driving_forward, generator, kp_detector, relative=opt.relative, adapt_movement_scale=opt.adapt_scale, cpu=opt.cpu)
-        predictions_backward = make_animation(source_image, driving_backward, generator, kp_detector, relative=opt.relative, adapt_movement_scale=opt.adapt_scale, cpu=opt.cpu)
-        predictions = predictions_backward[::-1] + predictions_forward[1:]
-    else:
-        predictions = make_animation(source_image, driving_video, generator, kp_detector, relative=opt.relative,
-                                 adapt_movement_scale=opt.adapt_scale, cpu=opt.cpu)
 
-    imageio.mimsave(opt.result_video, [img_as_ubyte(frame) for frame in predictions], fps=fps)
+# imageio.mimsave(opt.result_video, [img_as_ubyte(frame) for frame in predictions], fps=fps)
 

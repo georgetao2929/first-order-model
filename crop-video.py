@@ -11,6 +11,9 @@ import numpy as np
 import warnings
 warnings.filterwarnings("ignore")
 
+import ssl
+ssl._create_default_https_context = ssl._create_unverified_context
+
 def extract_bbox(frame, fa):
     if max(frame.shape[0], frame.shape[1]) > 640:
         scale_factor =  max(frame.shape[0], frame.shape[1]) / 640.0

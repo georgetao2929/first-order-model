@@ -29,6 +29,7 @@ import cv2
 from PyQt5 import QtCore, QtGui, QtWidgets
 import sys
 import cv2
+import predictor_local
 
 
 class Ui_MainWindow(QtWidgets.QWidget):
@@ -56,8 +57,10 @@ class Ui_MainWindow(QtWidgets.QWidget):
 
         self.button_open_camera = QtWidgets.QPushButton('打开相机')  # 建立用于打开摄像头的按键
         self.button_close = QtWidgets.QPushButton('退出')  # 建立用于退出程序的按键
+        self.button_resetframe = QtWidgets.QPushButton('重设')  # 建立用于退出程序的按键
         self.button_open_camera.setMinimumHeight(50)  # 设置按键大小
         self.button_close.setMinimumHeight(50)
+        self.button_resetframe.setMinimumHeight(50)
 
         # self.button_close.move(10, 100)  # 移动按键
         '''信息显示'''
@@ -68,6 +71,7 @@ class Ui_MainWindow(QtWidgets.QWidget):
         self.label_show_camera2.setFixedSize(640, 480)  # 给显示视频的Label设置大小为641x481 added
         '''把按键加入到按键布局中'''
         self.__layout_all_button_H.addWidget(self.button_open_camera)  # 把打开摄像头的按键放到按键布局中
+        self.__layout_all_button_H.addWidget(self.button_resetframe)  # 把重设帧的按键放到按键布局中
         self.__layout_all_button_H.addWidget(self.button_close)  # 把退出程序的按键放到按键布局中
 
         self.__layout_all_show_H.addWidget(self.label_show_camera)
@@ -81,9 +85,54 @@ class Ui_MainWindow(QtWidgets.QWidget):
         '''总布局布置好后就可以把总布局作为参数传入下面函数'''
         self.setLayout(self.__layout_main)  # 到这步才会显示所有控件
 
+        parser = ArgumentParser()
+        parser.add_argument("--config", default='config/vox-adv-256.yaml', help="path to config")
+        parser.add_argument("--checkpoint", default='checkpoint/vox-adv-cpk.pth.tar',
+                            help="path to checkpoint to restore")
+        parser.add_argument("--source_image", default='image/1.jpg', help="path to source image")
+        parser.add_argument("--relative", dest="relative", action="store_true",
+                            help="use relative or absolute keypoint coordinates")
+        parser.add_argument("--adapt_scale", dest="adapt_scale", action="store_true",
+                            help="adapt movement scale based on convex hull of keypoints")
+        parser.add_argument("--find_best_frame", dest="find_best_frame", action="store_true",
+                            help="Generate from the frame that is the most alligned with source. (Only for faces, requires face_aligment lib)")
+        parser.add_argument("--best_frame", dest="best_frame", type=int, default=None,
+                            help="Set frame to start from.")
+        parser.add_argument("--enc_downscale", default=1, type=float,
+                            help="Downscale factor for encoder input. Improves performance with cost of quality.")
+        parser.add_argument("--cpu", dest="cpu", action="store_true", help="cpu mode.")
+        parser.set_defaults(relative=False)
+        parser.set_defaults(adapt_scale=False)
+        self.opt = parser.parse_args()
+
+        self.generator, self.kp_detector = self.load_checkpoints(self.opt.config, self.opt.checkpoint, self.opt.cpu)
+        self.source_image = cv2.imread("image/obama.jpg")
+        if self.source_image.ndim == 2:
+            self.source_image = np.tile(self.source_image[..., None], [1, 1, 3])
+
+        predictor_args = {
+            'config_path': self.opt.config,
+            'checkpoint_path': self.opt.checkpoint,
+            'relative': self.opt.relative,
+            'adapt_movement_scale': self.opt.adapt_scale,
+            'enc_downscale': self.opt.enc_downscale
+        }
+
+        import predictor_local
+        global avatar_kp
+        self.predictor = predictor_local.PredictorLocal(
+            **predictor_args
+        )
+        self.source_image = self.source_image[..., :3][..., ::-1]
+        self.source_image = resize(self.source_image, (256, 256))
+        avatar_kp = self.predictor.get_frame_kp(self.source_image)
+        self.change_avatar(self.predictor, self.source_image)
+
+
     '''初始化所有槽函数'''
 
     def slot_init(self):
+        self.button_resetframe.clicked.connect(self.predictor.reset_frames)
         self.button_open_camera.clicked.connect(
             self.button_open_camera_clicked)  # 若该按键被点击，则调用button_open_camera_clicked()
         self.timer_camera.timeout.connect(self.show_camera)  # 若定时器结束，则调用show_camera()
@@ -98,7 +147,7 @@ class Ui_MainWindow(QtWidgets.QWidget):
             if flag == False:  # flag表示open()成不成功
                 msg = QtWidgets.QMessageBox.warning(self, 'warning', "请检查相机于电脑是否连接正确", buttons=QtWidgets.QMessageBox.Ok)
             else:
-                self.timer_camera.start(100)  # 定时器开始计时30ms，结果是每过30ms从摄像头中取一帧显示
+                self.timer_camera.start(50)  # 定时器开始计时30ms，结果是每过30ms从摄像头中取一帧显示
                 self.button_open_camera.setText('关闭相机')
         else:
             self.timer_camera.stop()  # 关闭定时器
@@ -118,35 +167,24 @@ class Ui_MainWindow(QtWidgets.QWidget):
         # self.label_show_camera2.setPixmap(QtGui.QPixmap.fromImage(showImage))  # 往显示视频的Label里 显示QImage added
 
     def show_animation(self):
-
-        parser = ArgumentParser()
-        parser.add_argument("--config", default='config/vox-adv-256.yaml', help="path to config")
-        parser.add_argument("--checkpoint", default='checkpoint/vox-adv-cpk.pth.tar', help="path to checkpoint to restore")
-        parser.add_argument("--source_image", default='image/1.jpg', help="path to source image")
-        parser.add_argument("--relative", dest="relative", action="store_true",
-                            help="use relative or absolute keypoint coordinates")
-        parser.add_argument("--adapt_scale", dest="adapt_scale", action="store_true",
-                            help="adapt movement scale based on convex hull of keypoints")
-        parser.add_argument("--find_best_frame", dest="find_best_frame", action="store_true",
-                            help="Generate from the frame that is the most alligned with source. (Only for faces, requires face_aligment lib)")
-        parser.add_argument("--best_frame", dest="best_frame", type=int, default=None,
-                            help="Set frame to start from.")
-        parser.add_argument("--cpu", dest="cpu", action="store_true", help="cpu mode.")
-        parser.set_defaults(relative=False)
-        parser.set_defaults(adapt_scale=False)
-        opt = parser.parse_args()
-
-        generator, kp_detector = self.load_checkpoints(opt.config, opt.checkpoint, opt.cpu)
-        source_image = imageio.imread("image/1.jpg")
-        driving_video = []
         flag, self.frame = self.cap.read()  # 从视频流中读取
+        driving_video = []
         driving_video.append(self.frame)
         driving_video = [resize(frame, (256, 256))[..., :3] for frame in driving_video]
-        source_image = resize(source_image, (256, 256))[..., :3]
+        # source_image = resize(self.source_image, (256, 256))[..., :3]
+        source_image=self.source_image
+        cv2.imshow("img", source_image)
 
-        self.predictions = self.make_animation(source_image, driving_video, generator, kp_detector, relative=opt.relative, adapt_movement_scale=opt.adapt_scale, cpu=opt.cpu)
+        if self.is_new_frame_better(source_image, self.frame, self.predictor):
+            green_overlay = True
+            self.predictor.reset_frames()
+
+        # self.predictions = self.predictor.predict(driving_video[-1])
+
+        self.predictions = self.make_animation(source_image, driving_video, self.generator, self.kp_detector, relative=self.opt.relative, adapt_movement_scale=self.opt.adapt_scale, cpu=self.opt.cpu)
+        self.predictions = img_as_ubyte(self.predictions)
         self.predictions = cv2.resize(self.predictions[-1], (640, 480))
-        self.predictions = cv2.cvtColor(self.predictions, cv2.COLOR_BGR2RGB)
+        #self.predictions = cv2.cvtColor(self.predictions, cv2.COLOR_BGR2RGB)
         showAnimation = QtGui.QImage(self.predictions.data, self.predictions.shape[1], self.predictions.shape[0],
                                  QtGui.QImage.Format_RGB888)
         self.label_show_camera2.setPixmap(QtGui.QPixmap.fromImage(showAnimation))
@@ -174,6 +212,7 @@ class Ui_MainWindow(QtWidgets.QWidget):
                 out = generator(source, kp_source=kp_source, kp_driving=kp_norm)
 
                 predictions.append(np.transpose(out['prediction'].data.cpu().numpy(), [0, 2, 3, 1])[0])
+
         return predictions
 
     def load_checkpoints(self,config_path, checkpoint_path, cpu=False):
@@ -207,6 +246,40 @@ class Ui_MainWindow(QtWidgets.QWidget):
         kp_detector.eval()
 
         return generator, kp_detector
+
+    def is_new_frame_better(self, source, driving, predictor):
+        global avatar_kp
+        global display_string
+
+        if avatar_kp is None:
+            display_string = "No face detected in avatar."
+            return False
+
+        if predictor.get_start_frame() is None:
+            display_string = "No frame to compare to."
+            return True
+
+        driving_smaller = resize(driving, (128, 128))[..., :3]
+        new_kp = predictor.get_frame_kp(driving)
+
+        if new_kp is not None:
+            new_norm = (np.abs(avatar_kp - new_kp) ** 2).sum()
+            old_norm = (np.abs(avatar_kp - predictor.get_start_frame_kp()) ** 2).sum()
+
+            out_string = "{0} : {1}".format(int(new_norm * 100), int(old_norm * 100))
+            display_string = out_string
+
+            return new_norm < old_norm
+        else:
+            display_string = "No face found!"
+            return False
+
+    def change_avatar(self, predictor, new_avatar):
+        global avatar, avatar_kp, kp_source
+        avatar_kp = predictor.get_frame_kp(new_avatar)
+        kp_source = None
+        avatar = new_avatar
+        predictor.set_source_image(avatar)
 
 
 if __name__ == '__main__':

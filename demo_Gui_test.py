@@ -39,41 +39,47 @@ class Ui_MainWindow(QtWidgets.QWidget):
 
     def set_ui(self):
         self.__layout_main = QtWidgets.QVBoxLayout()  # 总布局
-        self.__layout_fun_button = QtWidgets.QVBoxLayout()  # 按键布局
         self.__layout_data_show = QtWidgets.QVBoxLayout()  # 数据(视频)显示布局
-        self.__layout_data_show2 = QtWidgets.QVBoxLayout()  # 数据(视频)显示布局 added
-
-        self.__layout_all_button_H=QtWidgets.QHBoxLayout()
+        
+        self.__layout_all_button_H2=QtWidgets.QHBoxLayout()
+        self.__layout_all_button_H1 = QtWidgets.QHBoxLayout()
         self.__layout_all_show_H=QtWidgets.QHBoxLayout()
 
 
         self.button_open_camera = QtWidgets.QPushButton('打开相机')  # 建立用于打开摄像头的按键
         self.button_close = QtWidgets.QPushButton('退出')  # 建立用于退出程序的按键
-        self.button_resetframe = QtWidgets.QPushButton('重设')  # 建立用于重设帧的按键
+        self.button_resetframe = QtWidgets.QPushButton('重设基准帧')  # 建立用于重设帧的按键
         self.button_change_cource_image = QtWidgets.QPushButton('更换图片')
+        self.button_zoom_in = QtWidgets.QPushButton('放大范围')
+        self.button_zoom_out = QtWidgets.QPushButton('缩小范围')
         self.button_open_camera.setMinimumHeight(50)  # 设置按键大小
         self.button_close.setMinimumHeight(50)
         self.button_resetframe.setMinimumHeight(50)
         self.button_change_cource_image.setMinimumHeight(50)
+        self.button_zoom_in.setMinimumHeight(50)
+        self.button_zoom_out.setMinimumHeight(50)
 
-        # self.button_close.move(10, 100)  # 移动按键
         '''信息显示'''
         self.label_show_camera = QtWidgets.QLabel()  # 定义显示视频的Label
         self.label_show_camera.setFixedSize(640, 480)  # 给显示视频的Label设置大小为641x481
         self.label_show_camera2 = QtWidgets.QLabel()  # 定义显示视频的Label added
         self.label_show_camera2.setFixedSize(640, 480)  # 给显示视频的Label设置大小为641x481 added
         '''把按键加入到按键布局中'''
-        self.__layout_all_button_H.addWidget(self.button_open_camera)  # 把打开摄像头的按键放到按键布局中
-        self.__layout_all_button_H.addWidget(self.button_resetframe)  # 把重设帧的按键放到按键布局中
-        self.__layout_all_button_H.addWidget(self.button_change_cource_image)
-        self.__layout_all_button_H.addWidget(self.button_close)  # 把退出程序的按键放到按键布局中
+        self.__layout_all_button_H1.addWidget(self.button_zoom_in)
+        self.__layout_all_button_H1.addWidget(self.button_zoom_out)
+
+        self.__layout_all_button_H2.addWidget(self.button_open_camera)  # 把打开摄像头的按键放到按键布局中
+        self.__layout_all_button_H2.addWidget(self.button_resetframe)  # 把重设帧的按键放到按键布局中
+        self.__layout_all_button_H2.addWidget(self.button_change_cource_image)
+        self.__layout_all_button_H2.addWidget(self.button_close)  # 把退出程序的按键放到按键布局中
 
         self.__layout_all_show_H.addWidget(self.label_show_camera)
         self.__layout_all_show_H.addWidget(self.label_show_camera2)
         '''把某些控件加入到总布局中'''
 
         self.__layout_main.addLayout(self.__layout_all_show_H)  # 把按键布局加入到总布局中
-        self.__layout_main.addLayout(self.__layout_all_button_H)  # 把按键布局加入到总布局中
+        self.__layout_main.addLayout(self.__layout_all_button_H1)
+        self.__layout_main.addLayout(self.__layout_all_button_H2)  # 把按键布局加入到总布局中
         # self.__layout_main.addWidget(self.label_show_camera)  # 把用于显示视频的Label加入到总布局中
         # self.__layout_main.addWidget(self.label_show_camera2)  # 把用于显示视频的Label加入到总布局中 added
         '''总布局布置好后就可以把总布局作为参数传入下面函数'''
@@ -115,6 +121,8 @@ class Ui_MainWindow(QtWidgets.QWidget):
     '''初始化所有槽函数'''
 
     def slot_init(self):
+        self.button_zoom_in.clicked.connect(self.button_zoom_in_clicked)
+        self.button_zoom_out.clicked.connect(self.button_zoom_out_clicked)
         self.button_change_cource_image.clicked.connect(self.button_change_cource_image_clicked)
         self.button_resetframe.clicked.connect(self.button_reset_frame_clicked)
         self.button_open_camera.clicked.connect(
@@ -124,6 +132,17 @@ class Ui_MainWindow(QtWidgets.QWidget):
         self.button_close.clicked.connect(self.close)  # 若该按键被点击，则调用close()，注意这个close是父类QtWidgets.QWidget自带的，会关闭程序
 
     '''槽函数之一'''
+    def button_zoom_in_clicked(self):           #放大有效范围
+        self.x1=self.x1-5
+        self.y1=self.y1-5
+        self.x2=self.x2+5
+        self.y2=self.y2+5
+
+    def button_zoom_out_clicked(self):          #缩小有效范围
+        self.x1=self.x1+5
+        self.y1=self.y1+5
+        self.x2=self.x2-5
+        self.y2=self.y2-5
 
     def button_open_camera_clicked(self):
         if self.timer_camera.isActive() == False:  # 若定时器未启动
@@ -131,7 +150,7 @@ class Ui_MainWindow(QtWidgets.QWidget):
             if flag == False:  # flag表示open()成不成功
                 msg = QtWidgets.QMessageBox.warning(self, 'warning', "请检查相机于电脑是否连接正确", buttons=QtWidgets.QMessageBox.Ok)
             else:
-                self.timer_camera.start(50)  # 定时器开始计时30ms，结果是每过30ms从摄像头中取一帧显示
+                self.timer_camera.start(50)  # 定时器开始计时50ms，结果是每过50ms从摄像头中取一帧显示
                 self.button_open_camera.setText('关闭相机')
         else:
             self.timer_camera.stop()  # 关闭定时器
@@ -146,8 +165,9 @@ class Ui_MainWindow(QtWidgets.QWidget):
                                                           "getOpenFileName", "./",
                                                           "All Files (*);;Text Files (*.txt)")
         # 当窗口非继承QtWidgets.QDialog时，self可替换成 None
-        self.source_image = imageio.imread(directory[0])
-        self.source_image = resize(self.source_image, (256, 256))[..., :3]
+        if directory[0].endswith('.jpg') or directory[0].endswith('.jpeg') or directory[0].endswith('.png'):
+            self.source_image = imageio.imread(directory[0])
+            self.source_image = resize(self.source_image, (256, 256))[..., :3]
 
     def button_reset_frame_clicked(self):
         self.flag_first = 0
@@ -251,5 +271,6 @@ class Ui_MainWindow(QtWidgets.QWidget):
 if __name__ == '__main__':
     app = QtWidgets.QApplication(sys.argv)  # 固定的，表示程序应用
     ui = Ui_MainWindow()  # 实例化Ui_MainWindow
+    ui.setWindowTitle('first_order_model_demo')
     ui.show()  # 调用ui的show()以显示。同样show()是源于父类QtWidgets.QWidget的
     sys.exit(app.exec_())  # 不加这句，程序界面会一闪而过
